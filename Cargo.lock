@@ -75,6 +75,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72957246c41db82b8ef88a5486143830adeb8227ef9837740bdec67724cf2c5b"
 
 [[package]]
+name = "byteorder"
+version = "1.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "08c48aae112d48ed9f069b33538ea9e3e90aa263cfa3d1c24309612b1f7472de"
+
+[[package]]
 name = "cast"
 version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -199,6 +205,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e57bc460456ce2c829a36ff3bf0cf3d24190557747667e8ff51f31b9291c4f15"
 
 [[package]]
+name = "encode_unicode"
+version = "0.3.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a357d28ed41a50f9c765dbfe56cbc04a64e53e5fc58ba79fbc34c10ef3df831f"
+
+[[package]]
 name = "fixed"
 version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -254,8 +266,11 @@ dependencies = [
  "defmt",
  "defmt-rtt",
  "embedded-hal",
+ "nb 1.0.0",
  "nrf52840-hal 0.13.0",
  "panic-probe",
+ "usb-device",
+ "usbd-hid",
 ]
 
 [[package]]
@@ -443,6 +458,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "388a1df253eca08550bef6c72392cfe7c30914bf41df5269b68cbd6ff8f570a3"
 
 [[package]]
+name = "serde"
+version = "1.0.127"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f03b9878abf6d14e6779d3f24f07b2cfa90352cfec4acc5aab8f1ac7f146fae8"
+
+[[package]]
+name = "ssmarshal"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f3e6ad23b128192ed337dfa4f1b8099ced0c2bf30d61e551b65fda5916dbb850"
+dependencies = [
+ "encode_unicode",
+ "serde",
+]
+
+[[package]]
 name = "stable_deref_trait"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -476,6 +507,41 @@ name = "usb-device"
 version = "0.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6be90410d4772074ea49525e2e753b65920b94b57eee21a6ef7b6a6fe6296245"
+
+[[package]]
+name = "usbd-hid"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bab0c5efbec0d66d9fd77b64be7a186f7cfff99d9baaae3b7c312538c20ede02"
+dependencies = [
+ "serde",
+ "ssmarshal",
+ "usb-device",
+ "usbd-hid-macros",
+]
+
+[[package]]
+name = "usbd-hid-descriptors"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9e00430c0b39caf3957aba6c2b2824f8e70e1ac0278941418bf1fe35f9566d64"
+dependencies = [
+ "bitfield",
+]
+
+[[package]]
+name = "usbd-hid-macros"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b854699aa737a7176d3a0019032350deab561da90a237b69efe3d5ded3732efe"
+dependencies = [
+ "byteorder",
+ "proc-macro2",
+ "quote",
+ "serde",
+ "syn",
+ "usbd-hid-descriptors",
+]
 
 [[package]]
 name = "vcell"

@@ -14,7 +14,10 @@ defmt-rtt = "0.2.0"
 panic-probe = { version = "0.2.0", features = ["print-defmt"] }
 nrf52840-hal = "0.13.0"
 embedded-hal = "0.2.6"
+nb = "1.0.0"
 adafruit-neotrellis = { git = "https://github.com/Javier-varez/adafruit-neotrellis.git" }
+usb-device = "0.2.8"
+usbd-hid = "0.5.0"
 
 [features]
 # set logging levels here
