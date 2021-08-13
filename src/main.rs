@@ -63,13 +63,13 @@ enum BreathingDirection {
     Decreasing,
 }
 
-struct BreathingLights<'a, I2C: Read + Write> {
+struct BreathingLights<'a, I2C: Read + Write, const STEP: u8> {
     pixels: Vec<NeoPixels<'a, I2C>, 4>,
     direction: BreathingDirection,
     value: u8,
 }
 
-impl<'a, I2C: Read + Write> BreathingLights<'a, I2C> {
+impl<'a, I2C: Read + Write, const STEP: u8> BreathingLights<'a, I2C, STEP> {
     fn new(pixels: Vec<NeoPixels<'a, I2C>, 4>) -> Self {
         Self {
             pixels,
@@ -88,13 +88,13 @@ impl<'a, I2C: Read + Write> BreathingLights<'a, I2C> {
     fn calculate_next_state(&mut self) {
         match self.direction {
             BreathingDirection::Increasing => {
-                self.value += 1;
+                self.value = self.value.saturating_add(STEP);
                 if self.value == 255 {
                     self.direction = BreathingDirection::Decreasing;
                 }
             }
             BreathingDirection::Decreasing => {
-                self.value -= 1;
+                self.value = self.value.saturating_sub(STEP);
                 if self.value == 0 {
                     self.direction = BreathingDirection::Increasing;
                 }
@@ -148,7 +148,7 @@ fn main() -> ! {
         .filter_map(|x| x.as_mut().map(|x| x.neopixels()))
         .collect();
 
-    let mut breathing_lights = BreathingLights::new(pixels);
+    let mut breathing_lights = BreathingLights::<'_, _, 5>::new(pixels);
     breathing_lights.init();
 
     defmt::info!("App started!");
