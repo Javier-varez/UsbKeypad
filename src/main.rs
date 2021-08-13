@@ -6,8 +6,10 @@ use core::sync::atomic::{AtomicUsize, Ordering};
 use adafruit_neotrellis::{self as neotrellis, neopixel, NeoPixels, NeoTrellis};
 use defmt_rtt as _;
 use embedded_hal::blocking::i2c::{Read, Write};
+use heapless::Vec;
 use nrf52840_hal as _;
 use panic_probe as _;
+use shared_bus::BusManagerSimple;
 
 #[defmt::panic_handler]
 fn panic() -> ! {
@@ -34,9 +36,7 @@ fn plot_pixel_matrix<'a, I2C: Read + Write>(
     pixels: &[Pixel],
 ) -> Result<(), neotrellis::Error> {
     for i in 0..16usize {
-        neopixels
-            .set_pixel_rgb(i as u8, pixels[i].r, pixels[i].g, pixels[i].b)?
-            .show()?;
+        neopixels.set_pixel_rgb(i as u8, pixels[i].r, pixels[i].g, pixels[i].b)?;
     }
     neopixels.show()?;
 
@@ -64,18 +64,25 @@ enum BreathingDirection {
 }
 
 struct BreathingLights<'a, I2C: Read + Write> {
-    pixels: NeoPixels<'a, I2C>,
+    pixels: Vec<NeoPixels<'a, I2C>, 4>,
     direction: BreathingDirection,
     value: u8,
 }
 
 impl<'a, I2C: Read + Write> BreathingLights<'a, I2C> {
-    fn new(pixels: NeoPixels<'a, I2C>) -> Self {
+    fn new(pixels: Vec<NeoPixels<'a, I2C>, 4>) -> Self {
         Self {
             pixels,
             direction: BreathingDirection::Increasing,
             value: 0,
         }
+    }
+
+    fn init(&mut self) {
+        let mut_pixels: &mut Vec<NeoPixels<'a, I2C>, 4> = self.pixels.as_mut();
+        mut_pixels
+            .into_iter()
+            .for_each(|pixel| init_pixels(pixel).unwrap());
     }
 
     fn calculate_next_state(&mut self) {
@@ -102,7 +109,12 @@ impl<'a, I2C: Read + Write> BreathingLights<'a, I2C> {
             g: self.value,
             b: self.value,
         }; 16];
-        plot_pixel_matrix(&mut self.pixels, &matrix)?;
+
+        let mut_pixels: &mut Vec<NeoPixels<'a, I2C>, 4> = self.pixels.as_mut();
+        mut_pixels
+            .into_iter()
+            .for_each(|pixel| plot_pixel_matrix(pixel, &matrix).unwrap());
+
         Ok(())
     }
 }
@@ -119,19 +131,29 @@ fn main() -> ! {
     let twim =
         nrf52840_hal::twim::Twim::new(peripherals.TWIM0, pins, nrf52840_hal::twim::Frequency::K400);
 
+    let i2c = BusManagerSimple::new(twim);
+
     let mut timer = nrf52840_hal::timer::Timer::new(peripherals.TIMER0);
 
-    let mut neotrellis = NeoTrellis::new(twim, &mut timer, None).unwrap();
-    let mut pixels = neotrellis.neopixels();
+    let mut neotrellis = [
+        NeoTrellis::new(i2c.acquire_i2c(), &mut timer, Some(0x2e)).ok(),
+        NeoTrellis::new(i2c.acquire_i2c(), &mut timer, Some(0x2f)).ok(),
+        NeoTrellis::new(i2c.acquire_i2c(), &mut timer, Some(0x30)).ok(),
+        NeoTrellis::new(i2c.acquire_i2c(), &mut timer, Some(0x31)).ok(),
+    ];
 
-    init_pixels(&mut pixels).unwrap();
+    let pixels: Vec<NeoPixels<'_, _>, 4> = neotrellis
+        .as_mut()
+        .into_iter()
+        .filter_map(|x| x.as_mut().map(|x| x.neopixels()))
+        .collect();
 
     let mut breathing_lights = BreathingLights::new(pixels);
+    breathing_lights.init();
 
     defmt::info!("App started!");
 
     loop {
         breathing_lights.show_next().unwrap();
     }
-    // cortex_m::asm::bkpt();
 }
