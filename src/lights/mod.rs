@@ -1,6 +1,5 @@
 use adafruit_neotrellis::{self as neotrellis, neopixel, NeoPixels};
 use embedded_hal::blocking::i2c::{Read, Write};
-use heapless::Vec;
 
 #[derive(Clone, Copy)]
 pub struct Pixel {
@@ -41,24 +40,27 @@ enum BreathingDirection {
     Decreasing,
 }
 
-pub struct BreathingLights<'a, I2C: Read + Write, const STEP: u8> {
-    pixels: Vec<NeoPixels<'a, I2C>, 4>,
+pub struct BreathingLights<const STEP: u8> {
     direction: BreathingDirection,
     value: u8,
 }
 
-impl<'a, I2C: Read + Write, const STEP: u8> BreathingLights<'a, I2C, STEP> {
-    pub fn new(pixels: Vec<NeoPixels<'a, I2C>, 4>) -> Self {
+impl<const STEP: u8> BreathingLights<STEP> {
+    pub fn new() -> Self {
         Self {
-            pixels,
             direction: BreathingDirection::Increasing,
             value: 0,
         }
     }
 
-    pub fn init(&mut self) -> Result<(), neotrellis::Error> {
-        let mut_pixels: &mut Vec<NeoPixels<'a, I2C>, 4> = self.pixels.as_mut();
-        mut_pixels
+    pub fn init<'a, I2C>(
+        &mut self,
+        pixels: &mut [NeoPixels<'a, I2C>],
+    ) -> Result<(), neotrellis::Error>
+    where
+        I2C: Read + Write,
+    {
+        pixels
             .into_iter()
             .for_each(|pixel| init_pixels(pixel).unwrap());
         Ok(())
@@ -81,7 +83,13 @@ impl<'a, I2C: Read + Write, const STEP: u8> BreathingLights<'a, I2C, STEP> {
         }
     }
 
-    pub fn show_next(&mut self) -> Result<(), neotrellis::Error> {
+    pub fn show_next<'a, I2C>(
+        &mut self,
+        pixels: &mut [NeoPixels<'a, I2C>],
+    ) -> Result<(), neotrellis::Error>
+    where
+        I2C: Read + Write,
+    {
         self.calculate_next_state();
         let matrix = [Pixel {
             r: self.value,
@@ -89,8 +97,7 @@ impl<'a, I2C: Read + Write, const STEP: u8> BreathingLights<'a, I2C, STEP> {
             b: self.value,
         }; 16];
 
-        let mut_pixels: &mut Vec<NeoPixels<'a, I2C>, 4> = self.pixels.as_mut();
-        mut_pixels
+        pixels
             .into_iter()
             .for_each(|pixel| plot_pixel_matrix(pixel, &matrix).unwrap());
 

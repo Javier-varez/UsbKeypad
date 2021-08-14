@@ -48,15 +48,15 @@ fn main() -> ! {
         .filter_map(|addr| NeoTrellis::new(i2c.acquire_i2c(), &mut timer, Some(*addr)).ok())
         .collect();
     let devices: &mut [_] = devices.as_mut();
-    let pixels: Vec<_, 4> = devices.into_iter().map(|x| x.neopixels()).collect();
+    let mut pixels: Vec<_, 4> = devices.into_iter().map(|x| x.neopixels()).collect();
 
-    let mut breathing_lights = BreathingLights::<'_, _, 5>::new(pixels);
-    breathing_lights.init().unwrap();
+    let mut breathing_lights = BreathingLights::<5>::new();
+    breathing_lights.init(&mut pixels).unwrap();
 
     defmt::info!("App started!");
 
     loop {
-        if let Err(_) = breathing_lights.show_next() {
+        if let Err(_) = breathing_lights.show_next(&mut pixels) {
             defmt::error!("Error setting the lights");
         }
     }
