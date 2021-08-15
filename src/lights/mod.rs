@@ -3,25 +3,24 @@ use embedded_hal::blocking::i2c::{Read, Write};
 
 #[derive(Clone, Copy)]
 pub struct Pixel {
-    r: u8,
-    g: u8,
-    b: u8,
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
 }
 
-fn plot_pixel_matrix<'a, I2C: Read + Write>(
+pub fn plot_pixel_matrix<'a, I2C: Read + Write>(
     neopixels: &'_ mut NeoPixels<'a, I2C>,
     pixels: &[Pixel],
 ) -> Result<(), neotrellis::Error> {
-    for i in 0..16usize {
-        neopixels.set_pixel_rgb(i as u8, pixels[i].r, pixels[i].g, pixels[i].b)?;
+    for (i, pixel) in pixels.iter().enumerate() {
+        neopixels.set_pixel_rgb(i as u8, pixel.r, pixel.g, pixel.b)?;
     }
     neopixels.show()?;
 
     Ok(())
 }
-
-fn init_pixels<'a, I2C: Read + Write>(
-    pixels: &'_ mut NeoPixels<'a, I2C>,
+pub fn init_pixels<I2C: Read + Write>(
+    pixels: &'_ mut NeoPixels<'_, I2C>,
 ) -> Result<(), neotrellis::Error> {
     pixels
         .set_pin(3)?
@@ -61,7 +60,7 @@ impl<const STEP: u8> BreathingLights<STEP> {
         I2C: Read + Write,
     {
         pixels
-            .into_iter()
+            .iter_mut()
             .for_each(|pixel| init_pixels(pixel).unwrap());
         Ok(())
     }
@@ -98,7 +97,7 @@ impl<const STEP: u8> BreathingLights<STEP> {
         }; 16];
 
         pixels
-            .into_iter()
+            .iter_mut()
             .for_each(|pixel| plot_pixel_matrix(pixel, &matrix).unwrap());
 
         Ok(())
