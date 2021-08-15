@@ -1,18 +1,22 @@
 #![no_std]
 #![no_main]
+#![feature(type_alias_impl_trait)]
 
 mod lights;
+mod seesaw;
 
 use core::sync::atomic::{AtomicUsize, Ordering};
 
 use defmt_rtt as _;
-use heapless::Vec;
 use panic_probe as _;
 
-use adafruit_neotrellis::{Edge, KeyEvent, NeoTrellis};
-use lights::{BreathingLights, Pixel};
-use nrf52840_hal::{self as _, gpio, pac, timer, twim};
-use shared_bus::BusManagerSimple;
+use embassy::executor::Spawner;
+use embassy_nrf::{interrupt, twim, Peripherals};
+use embassy_traits::i2c::I2c;
+use seesaw::{
+    neopixel::{ColorOrder, Speed},
+    SeeSaw,
+};
 
 #[defmt::panic_handler]
 fn panic() -> ! {
@@ -27,68 +31,56 @@ defmt::timestamp!("{=usize}", {
     n
 });
 
-fn update_matrix(matrix: &mut [Pixel], index: u8, event: KeyEvent) {
-    let matrix_idx = (index * 16 + event.key) as usize;
-    matrix[matrix_idx].r = !matrix[matrix_idx].r;
-    matrix[matrix_idx].g = !matrix[matrix_idx].g;
-    matrix[matrix_idx].b = !matrix[matrix_idx].b;
+async fn set_pixel_rgb<I2C>(
+    seesaw: &mut SeeSaw<I2C>,
+    index: u8,
+    red: u8,
+    green: u8,
+    blue: u8,
+) -> Result<(), seesaw::Error>
+where
+    I2C: I2c,
+{
+    seesaw
+        .neopixel_write_buf_raw(3 * (index as u16), &[green, red, blue])
+        .await?;
+
+    Ok(())
 }
 
-#[cortex_m_rt::entry]
-fn main() -> ! {
-    let peripherals = pac::Peripherals::take().unwrap();
+#[embassy::main]
+async fn main(_spawner: Spawner, peripherals: Peripherals) {
+    let mut config = twim::Config::default();
+    config.frequency = twim::Frequency::K400;
 
-    let p1 = gpio::p1::Parts::new(peripherals.P1);
-    let pins = twim::Pins {
-        sda: p1.p1_05.degrade().into_floating_input(),
-        scl: p1.p1_06.degrade().into_floating_input(),
+    let irq = interrupt::take!(SPIM0_SPIS0_TWIM0_TWIS0_SPI0_TWI0);
+
+    let twim = twim::Twim::new(
+        peripherals.TWISPI0,
+        irq,
+        peripherals.P1_05,
+        peripherals.P1_06,
+        config,
+    );
+
+    let mut seesaw = SeeSaw {
+        i2c: twim,
+        address: 0x2E,
     };
-    let twim = twim::Twim::new(peripherals.TWIM0, pins, twim::Frequency::K400);
 
-    let i2c = BusManagerSimple::new(twim);
+    seesaw.neopixel_set_speed(Speed::Khz400).await.unwrap();
+    seesaw.neopixel_set_pin(3).await.unwrap();
+    seesaw
+        .neopixel_set_buf_length_pixels(16, ColorOrder::GRB)
+        .await
+        .unwrap();
 
-    let mut timer = timer::Timer::new(peripherals.TIMER0);
-
-    let neotrellis_addresses = [0x2e, 0x2f, 0x30, 0x31];
-    let mut devices: Vec<_, 4> = neotrellis_addresses
-        .iter()
-        .filter_map(|addr| NeoTrellis::new(i2c.acquire_i2c(), &mut timer, Some(*addr)).ok())
-        .collect();
-    let mut pixels: Vec<_, 4> = devices.iter_mut().map(|x| x.neopixels()).collect();
-
-    let mut breathing_lights = BreathingLights::<5>::new();
-    breathing_lights.init(&mut pixels).unwrap();
-    drop(pixels);
+    for i in 0..16 {
+        set_pixel_rgb(&mut seesaw, i, 255, 255, 255).await.unwrap();
+    }
+    seesaw.neopixel_show().await.unwrap();
 
     defmt::info!("App started!");
 
-    devices.iter_mut().for_each(|neotrellis| {
-        for i in 0..16 {
-            neotrellis
-                .keypad()
-                .enable_key_event(i, Edge::Rising)
-                .unwrap();
-        }
-        lights::init_pixels(&mut neotrellis.neopixels()).unwrap();
-    });
-
-    let mut matrix = [Pixel { r: 0, g: 0, b: 0 }; 64];
-
-    loop {
-        devices
-            .iter_mut()
-            .enumerate()
-            .for_each(|(index, neotrellis)| {
-                if let Some(event) = neotrellis.keypad().get_event(&mut timer).unwrap() {
-                    defmt::info!("Event: {}", event);
-                    update_matrix(&mut matrix, index as u8, event);
-                    let index = (index * 16) as usize;
-                    lights::plot_pixel_matrix(
-                        &mut neotrellis.neopixels(),
-                        &matrix[index..index + 16],
-                    )
-                    .unwrap();
-                }
-            });
-    }
+    loop {}
 }

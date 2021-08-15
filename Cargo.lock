@@ -22,7 +22,7 @@ dependencies = [
  "defmt",
  "defmt-rtt",
  "embedded-hal",
- "nrf52840-hal 0.12.2",
+ "nrf52840-hal",
  "panic-probe",
 ]
 
@@ -57,6 +57,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "autocfg"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cdb031dd78e28731d87d56cc8ffef4a8f36ca26c38fe2de700543e627f8a464a"
+
+[[package]]
 name = "az"
 version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -70,6 +76,12 @@ checksum = "5deb64efa5bd81e31fcd1938615a6d98c82eafcbcd787162b6f63b91d6bac5b3"
 dependencies = [
  "rustc_version 0.2.3",
 ]
+
+[[package]]
+name = "bare-metal"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f8fe8f5a8a398345e52358e18ff07cc17a568fbca5c6f73873d3a62056309603"
 
 [[package]]
 name = "bitfield"
@@ -111,7 +123,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9075300b07c6a56263b9b582c214d0ff037b00d45ec9fde1cc711490c56f1bb9"
 dependencies = [
  "aligned",
- "bare-metal",
+ "bare-metal 0.2.5",
  "bitfield",
  "cortex-m 0.7.3",
  "volatile-register",
@@ -123,7 +135,7 @@ version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2ac919ef424449ec8c08d515590ce15d9262c0ca5f0da5b0c901e971a3b783b3"
 dependencies = [
- "bare-metal",
+ "bare-metal 0.2.5",
  "bitfield",
  "embedded-hal",
  "volatile-register",
@@ -146,6 +158,52 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c8e3aa52243e26f5922fa522b0814019e0c98fc567e2756d715dce7ad7a81f49"
 dependencies = [
  "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "critical-section"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "84c1ce814a497d4fbc869a34a0da005fbd712d7034e4a48ee91e7f3c795a8b17"
+dependencies = [
+ "bare-metal 1.0.0",
+ "cfg-if",
+ "cortex-m 0.7.3",
+]
+
+[[package]]
+name = "darling"
+version = "0.10.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0d706e75d87e35569db781a9b5e2416cff1236a47ed380831f959382ccd5f858"
+dependencies = [
+ "darling_core",
+ "darling_macro",
+]
+
+[[package]]
+name = "darling_core"
+version = "0.10.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f0c960ae2da4de88a91b2d920c2a7233b400bc33cb28453a2987822d8392519b"
+dependencies = [
+ "fnv",
+ "ident_case",
+ "proc-macro2",
+ "quote",
+ "strsim",
+ "syn",
+]
+
+[[package]]
+name = "darling_macro"
+version = "0.10.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d9b5a2f4ac4969822c62224815d069952656cadc7084fdca9751e6d959189b72"
+dependencies = [
+ "darling_core",
  "quote",
  "syn",
 ]
@@ -189,6 +247,71 @@ dependencies = [
 ]
 
 [[package]]
+name = "embassy"
+version = "0.1.0"
+source = "git+https://github.com/embassy-rs/embassy#c310f18aaf6b42da232d678c38d6199596675840"
+dependencies = [
+ "atomic-polyfill",
+ "cortex-m 0.7.3",
+ "critical-section",
+ "defmt",
+ "embassy-macros",
+ "embassy-traits",
+ "embedded-hal",
+ "futures",
+ "pin-project",
+]
+
+[[package]]
+name = "embassy-hal-common"
+version = "0.1.0"
+source = "git+https://github.com/embassy-rs/embassy#c310f18aaf6b42da232d678c38d6199596675840"
+dependencies = [
+ "cortex-m 0.7.3",
+ "embassy",
+ "usb-device",
+]
+
+[[package]]
+name = "embassy-macros"
+version = "0.1.0"
+source = "git+https://github.com/embassy-rs/embassy#c310f18aaf6b42da232d678c38d6199596675840"
+dependencies = [
+ "darling",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "embassy-nrf"
+version = "0.1.0"
+source = "git+https://github.com/embassy-rs/embassy#c310f18aaf6b42da232d678c38d6199596675840"
+dependencies = [
+ "cortex-m 0.7.3",
+ "cortex-m-rt",
+ "critical-section",
+ "defmt",
+ "embassy",
+ "embassy-hal-common",
+ "embassy-macros",
+ "embedded-dma",
+ "embedded-hal",
+ "futures",
+ "nrf52840-pac 0.10.0",
+ "rand_core 0.6.3",
+]
+
+[[package]]
+name = "embassy-traits"
+version = "0.1.0"
+source = "git+https://github.com/embassy-rs/embassy#c310f18aaf6b42da232d678c38d6199596675840"
+dependencies = [
+ "defmt",
+ "embedded-hal",
+]
+
+[[package]]
 name = "embedded-dma"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -208,12 +331,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "embedded-storage"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e57bc460456ce2c829a36ff3bf0cf3d24190557747667e8ff51f31b9291c4f15"
-
-[[package]]
 name = "fixed"
 version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -223,6 +340,90 @@ dependencies = [
  "bytemuck",
  "half",
  "typenum",
+]
+
+[[package]]
+name = "fnv"
+version = "1.0.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
+
+[[package]]
+name = "futures"
+version = "0.3.16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1adc00f486adfc9ce99f77d717836f0c5aa84965eb0b4f051f4e83f7cab53f8b"
+dependencies = [
+ "futures-channel",
+ "futures-core",
+ "futures-io",
+ "futures-sink",
+ "futures-task",
+ "futures-util",
+]
+
+[[package]]
+name = "futures-channel"
+version = "0.3.16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "74ed2411805f6e4e3d9bc904c95d5d423b89b3b25dc0250aa74729de20629ff9"
+dependencies = [
+ "futures-core",
+ "futures-sink",
+]
+
+[[package]]
+name = "futures-core"
+version = "0.3.16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "af51b1b4a7fdff033703db39de8802c673eb91855f2e0d47dcf3bf2c0ef01f99"
+
+[[package]]
+name = "futures-io"
+version = "0.3.16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0b0e06c393068f3a6ef246c75cdca793d6a46347e75286933e5e75fd2fd11582"
+
+[[package]]
+name = "futures-macro"
+version = "0.3.16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c54913bae956fb8df7f4dc6fc90362aa72e69148e3f39041fbe8742d21e0ac57"
+dependencies = [
+ "autocfg",
+ "proc-macro-hack",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "futures-sink"
+version = "0.3.16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c0f30aaa67363d119812743aa5f33c201a7a66329f97d1a887022971feea4b53"
+
+[[package]]
+name = "futures-task"
+version = "0.3.16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbe54a98670017f3be909561f6ad13e810d9a51f3f061b902062ca3da80799f2"
+
+[[package]]
+name = "futures-util"
+version = "0.3.16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "67eb846bfd58e44a8481a00049e82c43e0ccb5d61f8dc071057cb19249dd4d78"
+dependencies = [
+ "autocfg",
+ "futures-core",
+ "futures-macro",
+ "futures-sink",
+ "futures-task",
+ "pin-project-lite",
+ "pin-utils",
+ "proc-macro-hack",
+ "proc-macro-nested",
 ]
 
 [[package]]
@@ -280,6 +481,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "ident_case"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b9e0384b61958566e926dc50660321d12159025e767c18e043daf26b70104c39"
+
+[[package]]
 name = "light_controller"
 version = "0.1.0"
 dependencies = [
@@ -288,9 +495,12 @@ dependencies = [
  "cortex-m-rt",
  "defmt",
  "defmt-rtt",
+ "embassy",
+ "embassy-nrf",
+ "embassy-traits",
  "embedded-hal",
+ "futures",
  "heapless",
- "nrf52840-hal 0.13.0",
  "panic-probe",
  "shared-bus",
 ]
@@ -323,40 +533,9 @@ dependencies = [
  "embedded-hal",
  "fixed",
  "nb 1.0.0",
- "nrf52840-pac",
+ "nrf52840-pac 0.9.0",
  "rand_core 0.5.1",
  "void",
-]
-
-[[package]]
-name = "nrf-hal-common"
-version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "927d948c3642ccd6228656760df3ec590ec2c04fa5f4a9b414b23f85540de512"
-dependencies = [
- "cast",
- "cfg-if",
- "cortex-m 0.7.3",
- "embedded-dma",
- "embedded-hal",
- "embedded-storage",
- "fixed",
- "nb 1.0.0",
- "nrf-usbd",
- "nrf52840-pac",
- "rand_core 0.6.3",
- "void",
-]
-
-[[package]]
-name = "nrf-usbd"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "945a178131ac5f69941dadb0d51c8e17cbe34cc09a0e2d51c099160a463751b8"
-dependencies = [
- "cortex-m 0.7.3",
- "usb-device",
- "vcell",
 ]
 
 [[package]]
@@ -366,19 +545,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "045ef73ba10d9a3fe59534f8b94c78bc14a7ed1ce1b7e4cea99ac0945f41494a"
 dependencies = [
  "embedded-hal",
- "nrf-hal-common 0.12.2",
- "nrf52840-pac",
-]
-
-[[package]]
-name = "nrf52840-hal"
-version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "291537191c37e45acdf875ec3a26ff4093cb44b78636b0122401bc8068d469a9"
-dependencies = [
- "embedded-hal",
- "nrf-hal-common 0.13.0",
- "nrf52840-pac",
+ "nrf-hal-common",
+ "nrf52840-pac 0.9.0",
 ]
 
 [[package]]
@@ -387,8 +555,19 @@ version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e1b780a5afd2621774652f28c82837f6aa6d19cf0ad71c734fc1fe53298a2d73"
 dependencies = [
- "bare-metal",
+ "bare-metal 0.2.5",
  "cortex-m 0.6.7",
+ "cortex-m-rt",
+ "vcell",
+]
+
+[[package]]
+name = "nrf52840-pac"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cd2678a032033e63b1f32b2d9b3256b98211bdca17e0c6d7938c0eb9d5821294"
+dependencies = [
+ "cortex-m 0.7.3",
  "cortex-m-rt",
  "vcell",
 ]
@@ -403,6 +582,50 @@ dependencies = [
  "cortex-m-rt",
  "defmt",
 ]
+
+[[package]]
+name = "pin-project"
+version = "1.0.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "576bc800220cc65dac09e99e97b08b358cfab6e17078de8dc5fee223bd2d0c08"
+dependencies = [
+ "pin-project-internal",
+]
+
+[[package]]
+name = "pin-project-internal"
+version = "1.0.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6e8fe8163d14ce7f0cdac2e040116f22eac817edabff0be91e8aff7e9accf389"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "pin-project-lite"
+version = "0.2.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8d31d11c69a6b52a174b42bdc0c30e5e11670f90788b2c471c31c1d17d449443"
+
+[[package]]
+name = "pin-utils"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
+
+[[package]]
+name = "proc-macro-hack"
+version = "0.5.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dbf0c48bc1d91375ae5c3cd81e3722dff1abcf81a30960240640d223f59fe0e5"
+
+[[package]]
+name = "proc-macro-nested"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc881b2c22681370c6a780e47af9840ef841837bc98118431d4e1868bd0c1086"
 
 [[package]]
 name = "proc-macro2"
@@ -493,6 +716,12 @@ name = "stable_deref_trait"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
+
+[[package]]
+name = "strsim"
+version = "0.9.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6446ced80d6c486436db5c078dde11a9f73d42b57fb273121e160b84f63d894c"
 
 [[package]]
 name = "syn"
