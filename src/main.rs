@@ -1,18 +1,27 @@
 #![no_std]
 #![no_main]
 
+mod display;
 mod lights;
 
+use core::convert::TryFrom;
 use core::sync::atomic::{AtomicUsize, Ordering};
 
 use defmt_rtt as _;
-use heapless::Vec;
 use panic_probe as _;
 
-use adafruit_neotrellis::{Edge, KeyEvent, NeoTrellis};
-use lights::{BreathingLights, Pixel};
+use adafruit_neotrellis::NeoTrellis;
+use embedded_graphics::{
+    mono_font::{ascii::FONT_5X8, MonoTextStyle},
+    pixelcolor::Rgb888,
+    prelude::*,
+    text::{Baseline, Text, TextStyleBuilder},
+};
+use embedded_hal::blocking::delay::DelayMs;
 use nrf52840_hal::{self as _, gpio, pac, timer, twim};
 use shared_bus::BusManagerSimple;
+
+use display::NeoTrellisDisplay;
 
 #[defmt::panic_handler]
 fn panic() -> ! {
@@ -26,13 +35,6 @@ defmt::timestamp!("{=usize}", {
     COUNT.store(n + 1, Ordering::Relaxed);
     n
 });
-
-fn update_matrix(matrix: &mut [Pixel], index: u8, event: KeyEvent) {
-    let matrix_idx = (index * 16 + event.key) as usize;
-    matrix[matrix_idx].r = !matrix[matrix_idx].r;
-    matrix[matrix_idx].g = !matrix[matrix_idx].g;
-    matrix[matrix_idx].b = !matrix[matrix_idx].b;
-}
 
 #[cortex_m_rt::entry]
 fn main() -> ! {
@@ -49,46 +51,35 @@ fn main() -> ! {
 
     let mut timer = timer::Timer::new(peripherals.TIMER0);
 
-    let neotrellis_addresses = [0x2e, 0x2f, 0x30, 0x31];
-    let mut devices: Vec<_, 4> = neotrellis_addresses
-        .iter()
-        .filter_map(|addr| NeoTrellis::new(i2c.acquire_i2c(), &mut timer, Some(*addr)).ok())
-        .collect();
-    let mut pixels: Vec<_, 4> = devices.iter_mut().map(|x| x.neopixels()).collect();
+    let neotrellis_devs = [
+        NeoTrellis::new(i2c.acquire_i2c(), &mut timer, Some(0x2E)).unwrap(),
+        NeoTrellis::new(i2c.acquire_i2c(), &mut timer, Some(0x2F)).unwrap(),
+        NeoTrellis::new(i2c.acquire_i2c(), &mut timer, Some(0x30)).unwrap(),
+        NeoTrellis::new(i2c.acquire_i2c(), &mut timer, Some(0x31)).unwrap(),
+    ];
 
-    let mut breathing_lights = BreathingLights::<5>::new();
-    breathing_lights.init(&mut pixels).unwrap();
-    drop(pixels);
-
+    let mut display = NeoTrellisDisplay::new(neotrellis_devs).unwrap();
     defmt::info!("App started!");
 
-    devices.iter_mut().for_each(|neotrellis| {
-        for i in 0..16 {
-            neotrellis
-                .keypad()
-                .enable_key_event(i, Edge::Rising)
-                .unwrap();
-        }
-        lights::init_pixels(&mut neotrellis.neopixels()).unwrap();
-    });
+    let character_style = MonoTextStyle::new(&FONT_5X8, Rgb888::new(255, 255, 255));
+    let text_style = TextStyleBuilder::new().baseline(Baseline::Bottom).build();
+    let text = "SCROLLING TEXT!";
 
-    let mut matrix = [Pixel { r: 0, g: 0, b: 0 }; 64];
-
+    let max_disp = text.len() * 5;
     loop {
-        devices
-            .iter_mut()
-            .enumerate()
-            .for_each(|(index, neotrellis)| {
-                if let Some(event) = neotrellis.keypad().get_event(&mut timer).unwrap() {
-                    defmt::info!("Event: {}", event);
-                    update_matrix(&mut matrix, index as u8, event);
-                    let index = (index * 16) as usize;
-                    lights::plot_pixel_matrix(
-                        &mut neotrellis.neopixels(),
-                        &matrix[index..index + 16],
-                    )
-                    .unwrap();
-                }
-            });
+        for i in 0..max_disp {
+            display.clear(Rgb888::new(0, 0, 0)).unwrap();
+            Text::with_text_style(
+                text,
+                Point::new(-i32::try_from(i).unwrap(), 7),
+                character_style,
+                text_style,
+            )
+            .draw(&mut display)
+            .unwrap();
+            display.flush().unwrap();
+
+            timer.delay_ms(200u32);
+        }
     }
 }
