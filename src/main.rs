@@ -20,6 +20,7 @@ use embedded_graphics::{
 use embedded_hal::blocking::delay::DelayMs;
 use nrf52840_hal::{self as _, gpio, pac, timer, twim};
 use shared_bus::BusManagerSimple;
+use tinybmp::Bmp;
 
 use display::NeoTrellisDisplay;
 
@@ -61,14 +62,50 @@ fn main() -> ! {
     let mut display = NeoTrellisDisplay::new(neotrellis_devs).unwrap();
     defmt::info!("App started!");
 
-    let character_style = MonoTextStyle::new(&FONT_5X8, Rgb888::new(255, 255, 255));
+    let character_style = MonoTextStyle::new(&FONT_5X8, Rgb888::WHITE);
     let text_style = TextStyleBuilder::new().baseline(Baseline::Bottom).build();
-    let text = "SCROLLING TEXT!";
+    let text = "COOL!";
 
-    let max_disp = text.len() * 5;
+    let bmp_data = include_bytes!("../heart.bmp");
+    let bmp = Bmp::<Rgb888>::from_slice(bmp_data).unwrap();
+
+    const TEXT_WIDTH: usize = 5;
+    let max_disp = text.len() * TEXT_WIDTH;
     loop {
+        for _ in 0..4 {
+            for i in 0..100 {
+                display.clear(Rgb888::BLACK).unwrap();
+                display
+                    .draw_iter(bmp.pixels().map(|pixel| {
+                        if i < 50 {
+                            Pixel(
+                                pixel.0,
+                                Rgb888::new(
+                                    (pixel.1.r() as u32 * i / 50) as u8,
+                                    (pixel.1.g() as u32 * i / 50) as u8,
+                                    (pixel.1.b() as u32 * i / 50) as u8,
+                                ),
+                            )
+                        } else {
+                            Pixel(
+                                pixel.0,
+                                Rgb888::new(
+                                    (pixel.1.r() as u32 * (100 - i) / 50) as u8,
+                                    (pixel.1.g() as u32 * (100 - i) / 50) as u8,
+                                    (pixel.1.b() as u32 * (100 - i) / 50) as u8,
+                                ),
+                            )
+                        }
+                    }))
+                    .unwrap();
+                display.flush().unwrap();
+
+                timer.delay_ms(20u32);
+            }
+        }
+
         for i in 0..max_disp {
-            display.clear(Rgb888::new(0, 0, 0)).unwrap();
+            display.clear(Rgb888::BLACK).unwrap();
             Text::with_text_style(
                 text,
                 Point::new(-i32::try_from(i).unwrap(), 7),
@@ -78,7 +115,6 @@ fn main() -> ! {
             .draw(&mut display)
             .unwrap();
             display.flush().unwrap();
-
             timer.delay_ms(200u32);
         }
     }

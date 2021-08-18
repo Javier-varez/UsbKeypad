@@ -109,7 +109,7 @@ where
     {
         for Pixel(coord, color) in pixels.into_iter() {
             if let Ok(index) = self.index_for_coordinate(coord) {
-                self.framebuffer[index] = color.clone();
+                self.framebuffer[index] = color;
             }
         }
         Ok(())
