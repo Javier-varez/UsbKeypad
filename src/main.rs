@@ -18,7 +18,6 @@ use embedded_graphics::{
     prelude::*,
     text::{Baseline, Text, TextStyleBuilder},
 };
-use embedded_hal::blocking::delay::DelayMs;
 use nrf52840_hal::{self as _, gpio, pac, timer, twim};
 use shared_bus::BusManagerSimple;
 use tinybmp::Bmp;
@@ -82,6 +81,32 @@ fn apply_breathing_effect<I2C, TIMER>(
     }
 }
 
+fn scroll_text<T, TIMER>(display: &mut NeoTrellisDisplay<T>, timer: &mut TIMER, text: &str)
+where
+    T: embedded_hal::blocking::i2c::Write + embedded_hal::blocking::i2c::Read,
+    TIMER: embedded_hal::blocking::delay::DelayMs<u32>,
+{
+    const TEXT_WIDTH: usize = 5;
+
+    let character_style = MonoTextStyle::new(&FONT_5X8, Rgb888::WHITE);
+    let text_style = TextStyleBuilder::new().baseline(Baseline::Bottom).build();
+
+    let max_disp = text.len() * TEXT_WIDTH;
+    for i in 0..max_disp {
+        display.clear(Rgb888::BLACK).unwrap();
+        Text::with_text_style(
+            text,
+            Point::new(-i32::try_from(i).unwrap(), 7),
+            character_style,
+            text_style,
+        )
+        .draw(display)
+        .unwrap();
+        display.flush().unwrap();
+        timer.delay_ms(200u32);
+    }
+}
+
 #[cortex_m_rt::entry]
 fn main() -> ! {
     let peripherals = pac::Peripherals::take().unwrap();
@@ -107,31 +132,13 @@ fn main() -> ! {
     let mut display = NeoTrellisDisplay::new(neotrellis_devs).unwrap();
     defmt::info!("App started!");
 
-    let character_style = MonoTextStyle::new(&FONT_5X8, Rgb888::WHITE);
-    let text_style = TextStyleBuilder::new().baseline(Baseline::Bottom).build();
-    let text = "COOL!";
-    let bmp_data = include_bytes!("../heart.bmp");
-    let bmp = Bmp::<Rgb888>::from_slice(bmp_data).unwrap();
+    let heart_data = include_bytes!("../heart.bmp");
+    let heart_bmp = Bmp::<Rgb888>::from_slice(heart_data).unwrap();
 
-    const TEXT_WIDTH: usize = 5;
-    let max_disp = text.len() * TEXT_WIDTH;
     loop {
         for _ in 0..4 {
-            apply_breathing_effect(&mut display, &mut timer, &bmp, 2000);
+            apply_breathing_effect(&mut display, &mut timer, &heart_bmp, 1000);
         }
-
-        for i in 0..max_disp {
-            display.clear(Rgb888::BLACK).unwrap();
-            Text::with_text_style(
-                text,
-                Point::new(-i32::try_from(i).unwrap(), 7),
-                character_style,
-                text_style,
-            )
-            .draw(&mut display)
-            .unwrap();
-            display.flush().unwrap();
-            timer.delay_ms(200u32);
-        }
+        scroll_text(&mut display, &mut timer, "COOL!");
     }
 }
