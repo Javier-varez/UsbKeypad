@@ -12,6 +12,7 @@ use panic_probe as _;
 
 use adafruit_neotrellis::NeoTrellis;
 use embedded_graphics::{
+    draw_target::DrawTarget,
     mono_font::{ascii::FONT_5X8, MonoTextStyle},
     pixelcolor::Rgb888,
     prelude::*,
@@ -36,6 +37,50 @@ defmt::timestamp!("{=usize}", {
     COUNT.store(n + 1, Ordering::Relaxed);
     n
 });
+
+fn apply_breathing_effect<I2C, TIMER>(
+    display: &mut NeoTrellisDisplay<I2C>,
+    timer: &mut TIMER,
+    bmp: &Bmp<'_, Rgb888>,
+    time_ms: u32,
+) where
+    I2C: embedded_hal::blocking::i2c::Write + embedded_hal::blocking::i2c::Read,
+    TIMER: embedded_hal::blocking::delay::DelayMs<u32>,
+{
+    const NUM_FRAMES: u32 = 100;
+
+    let time_per_frame = time_ms / NUM_FRAMES;
+
+    let apply_alpha = |value, alpha| {
+        let value = value as u32;
+        (if alpha < 50 {
+            value * alpha / 50
+        } else {
+            value * (100 - alpha) / 50
+        }) as u8
+    };
+
+    let convert_color = |color: Rgb888, alpha| {
+        Rgb888::new(
+            apply_alpha(color.r(), alpha),
+            apply_alpha(color.g(), alpha),
+            apply_alpha(color.b(), alpha),
+        )
+    };
+
+    for i in 0..NUM_FRAMES {
+        display.clear(Rgb888::BLACK).unwrap();
+        display
+            .draw_iter(
+                bmp.pixels()
+                    .map(|pixel| Pixel(pixel.0, convert_color(pixel.1, i))),
+            )
+            .unwrap();
+        display.flush().unwrap();
+
+        timer.delay_ms(time_per_frame);
+    }
+}
 
 #[cortex_m_rt::entry]
 fn main() -> ! {
@@ -65,7 +110,6 @@ fn main() -> ! {
     let character_style = MonoTextStyle::new(&FONT_5X8, Rgb888::WHITE);
     let text_style = TextStyleBuilder::new().baseline(Baseline::Bottom).build();
     let text = "COOL!";
-
     let bmp_data = include_bytes!("../heart.bmp");
     let bmp = Bmp::<Rgb888>::from_slice(bmp_data).unwrap();
 
@@ -73,35 +117,7 @@ fn main() -> ! {
     let max_disp = text.len() * TEXT_WIDTH;
     loop {
         for _ in 0..4 {
-            for i in 0..100 {
-                display.clear(Rgb888::BLACK).unwrap();
-                display
-                    .draw_iter(bmp.pixels().map(|pixel| {
-                        if i < 50 {
-                            Pixel(
-                                pixel.0,
-                                Rgb888::new(
-                                    (pixel.1.r() as u32 * i / 50) as u8,
-                                    (pixel.1.g() as u32 * i / 50) as u8,
-                                    (pixel.1.b() as u32 * i / 50) as u8,
-                                ),
-                            )
-                        } else {
-                            Pixel(
-                                pixel.0,
-                                Rgb888::new(
-                                    (pixel.1.r() as u32 * (100 - i) / 50) as u8,
-                                    (pixel.1.g() as u32 * (100 - i) / 50) as u8,
-                                    (pixel.1.b() as u32 * (100 - i) / 50) as u8,
-                                ),
-                            )
-                        }
-                    }))
-                    .unwrap();
-                display.flush().unwrap();
-
-                timer.delay_ms(20u32);
-            }
+            apply_breathing_effect(&mut display, &mut timer, &bmp, 2000);
         }
 
         for i in 0..max_disp {
