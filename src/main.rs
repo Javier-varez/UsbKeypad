@@ -2,7 +2,6 @@
 #![no_main]
 
 mod display;
-mod lights;
 
 use core::convert::TryFrom;
 use core::sync::atomic::{AtomicUsize, Ordering};
