@@ -23,17 +23,16 @@ use tinybmp::Bmp;
 
 use display::NeoTrellisDisplay;
 
+use rtic::cyccnt::U32Ext as _;
+
 #[defmt::panic_handler]
 fn panic() -> ! {
     cortex_m::asm::udf()
 }
 
-static COUNT: AtomicUsize = AtomicUsize::new(0);
 defmt::timestamp!("{=usize}", {
-    // NOTE(no-CAS) `timestamps` runs with interrupts disabled
-    let n = COUNT.load(Ordering::Relaxed);
-    COUNT.store(n + 1, Ordering::Relaxed);
-    n
+    static COUNT: AtomicUsize = AtomicUsize::new(0);
+    COUNT.fetch_add(1, Ordering::Relaxed)
 });
 
 fn apply_breathing_effect<I2C, TIMER>(
@@ -106,38 +105,78 @@ where
     }
 }
 
-#[cortex_m_rt::entry]
-fn main() -> ! {
-    let peripherals = pac::Peripherals::take().unwrap();
+static HEART_DATA: &[u8; 246] = include_bytes!("../heart.bmp");
 
-    let p1 = gpio::p1::Parts::new(peripherals.P1);
-    let pins = twim::Pins {
-        sda: p1.p1_05.degrade().into_floating_input(),
-        scl: p1.p1_06.degrade().into_floating_input(),
-    };
-    let twim = twim::Twim::new(peripherals.TWIM0, pins, twim::Frequency::K400);
-
-    let i2c = BusManagerSimple::new(twim);
-
-    let mut timer = timer::Timer::new(peripherals.TIMER0);
-
-    let neotrellis_devs = [
-        NeoTrellis::new(i2c.acquire_i2c(), &mut timer, Some(0x2E)).unwrap(),
-        NeoTrellis::new(i2c.acquire_i2c(), &mut timer, Some(0x2F)).unwrap(),
-        NeoTrellis::new(i2c.acquire_i2c(), &mut timer, Some(0x30)).unwrap(),
-        NeoTrellis::new(i2c.acquire_i2c(), &mut timer, Some(0x31)).unwrap(),
-    ];
-
-    let mut display = NeoTrellisDisplay::new(neotrellis_devs).unwrap();
-    defmt::info!("App started!");
-
-    let heart_data = include_bytes!("../heart.bmp");
-    let heart_bmp = Bmp::<Rgb888>::from_slice(heart_data).unwrap();
-
-    loop {
-        for _ in 0..4 {
-            apply_breathing_effect(&mut display, &mut timer, &heart_bmp, 1000);
-        }
-        scroll_text(&mut display, &mut timer, "COOL!");
+#[rtic::app(device = nrf52840_hal::pac, peripherals = true, monotonic = rtic::cyccnt::CYCCNT)]
+const APP: () = {
+    struct Resources {
+        timer: timer::Timer<pac::TIMER0>,
+        i2c: BusManagerSimple<twim::Twim<pac::TWIM0>>,
+        heart_bmp: Bmp<'static, Rgb888>,
     }
-}
+
+    #[init(schedule = [run_display])]
+    fn init(mut cx: init::Context) -> init::LateResources {
+        // Initialize (enable) the monotonic timer (CYCCNT)
+        cx.core.DCB.enable_trace();
+        // required on Cortex-M7 devices that software lock the DWT (e.g. STM32F7)
+        cortex_m::peripheral::DWT::unlock();
+        cx.core.DWT.enable_cycle_counter();
+
+        let now = cx.start; // the start time of the system
+
+        let peripherals = cx.device;
+
+        let p1 = gpio::p1::Parts::new(peripherals.P1);
+        let pins = twim::Pins {
+            sda: p1.p1_05.degrade().into_floating_input(),
+            scl: p1.p1_06.degrade().into_floating_input(),
+        };
+
+        let twim: twim::Twim<pac::TWIM0> =
+            twim::Twim::new(peripherals.TWIM0, pins, twim::Frequency::K400);
+        let timer = timer::Timer::new(peripherals.TIMER0);
+        let i2c = BusManagerSimple::new(twim);
+
+        let heart_bmp = Bmp::<Rgb888>::from_slice(HEART_DATA).unwrap();
+
+        defmt::info!("App started!");
+
+        cx.schedule
+            .run_display(now + 8_000_000u32.cycles())
+            .unwrap();
+
+        init::LateResources {
+            timer,
+            i2c,
+            heart_bmp,
+        }
+    }
+
+    #[task(resources = [i2c, timer, heart_bmp])]
+    fn run_display(cx: run_display::Context) {
+        let timer = cx.resources.timer;
+        let i2c = cx.resources.i2c;
+        let heart_bmp = cx.resources.heart_bmp;
+
+        let neotrellis_devs = [
+            NeoTrellis::new(i2c.acquire_i2c(), timer, Some(0x2E)).unwrap(),
+            NeoTrellis::new(i2c.acquire_i2c(), timer, Some(0x2F)).unwrap(),
+            NeoTrellis::new(i2c.acquire_i2c(), timer, Some(0x30)).unwrap(),
+            NeoTrellis::new(i2c.acquire_i2c(), timer, Some(0x31)).unwrap(),
+        ];
+        let mut display = NeoTrellisDisplay::new(neotrellis_devs);
+        display.init().unwrap();
+
+        loop {
+            apply_breathing_effect(&mut display, timer, heart_bmp, 1000);
+            scroll_text(&mut display, timer, "Hi There!!");
+
+            defmt::info!("run_display finished");
+        }
+    }
+
+    extern "C" {
+        fn QSPI();
+    }
+};

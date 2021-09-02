@@ -64,19 +64,21 @@ impl<I2C> NeoTrellisDisplay<I2C>
 where
     I2C: Read + Write,
 {
-    pub fn new(devices: [NeoTrellis<I2C>; 4]) -> Result<Self, Error> {
-        let mut instance = Self {
+    pub fn new(devices: [NeoTrellis<I2C>; 4]) -> Self {
+        Self {
             devices,
             framebuffer: [pixelcolor::Rgb888::default(); 64],
-        };
+        }
+    }
 
-        for dev in &mut instance.devices {
+    pub fn init(&mut self) -> Result<(), Error> {
+        for dev in &mut self.devices {
             init_pixels(&mut dev.neopixels())?;
         }
-        instance.flush()?;
-
-        Ok(instance)
+        self.flush()?;
+        Ok(())
     }
+
     pub fn flush(&mut self) -> Result<(), Error> {
         for (i, dev) in self.devices.iter_mut().enumerate() {
             let index = i * 16;
