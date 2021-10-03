@@ -121,7 +121,7 @@ mod app {
         device::{UsbDevice, UsbDeviceBuilder},
         prelude::*,
     };
-    use usbd_hid::descriptor::{MouseReport, SerializedDescriptor};
+    use usbd_hid::descriptor::{KeyboardReport, SerializedDescriptor};
     use usbd_hid::hid_class::HIDClass;
 
     use dwt_systick_monotonic::DwtSystick;
@@ -138,6 +138,7 @@ mod app {
         i2c: BusManagerSimple<twim::Twim<pac::TWIM0>>,
         heart_bmp: Bmp<'static, Rgb888>,
         usb_device: UsbDevice<'static, usbd::Usbd<usbd::UsbPeripheral<'static>>>,
+        keycode_pingpong: bool,
     }
 
     #[shared]
@@ -185,7 +186,7 @@ mod app {
         *cx.local.usb_buf_alloc = Some(usb_bus.into());
         let usb_bus_allocator = cx.local.usb_buf_alloc.as_ref().unwrap();
 
-        let mut hid_class = HIDClass::new(usb_bus_allocator, MouseReport::desc(), 60);
+        let mut hid_class = HIDClass::new(usb_bus_allocator, KeyboardReport::desc(), 60);
         let mut usb_device = UsbDeviceBuilder::new(usb_bus_allocator, UsbVidPid(0x5824, 0x27dd))
             .manufacturer("AllThingsEmbedded")
             .product("USB mouse")
@@ -204,6 +205,7 @@ mod app {
                 i2c,
                 heart_bmp,
                 usb_device,
+                keycode_pingpong: true,
             },
             init::Monotonics(mono),
         )
@@ -213,22 +215,34 @@ mod app {
     fn usb_task(mut cx: usb_task::Context) {
         let usb_dev = cx.local.usb_device;
         cx.shared.hid_class.lock(|hid| {
-            usb_dev.poll(&mut [hid]);
+            if usb_dev.poll(&mut [hid]) {
+                hid_task::spawn().unwrap();
+            }
         });
         usb_task::spawn_after(Milliseconds(2u32)).unwrap();
     }
 
-    #[task(shared = [hid_class], priority = 2)]
+    #[task(local = [keycode_pingpong], shared = [hid_class], priority = 2)]
     fn hid_task(mut cx: hid_task::Context) {
-        defmt::info!("moving mouse");
+        let keycode_0 = 0x27;
+        let keycode = if *cx.local.keycode_pingpong {
+            keycode_0
+        } else {
+            0
+        };
+        defmt::info!("Sending keycode {}", keycode);
+        *cx.local.keycode_pingpong = !*cx.local.keycode_pingpong;
         cx.shared.hid_class.lock(|hid| {
-            let report = MouseReport {
-                x: 0,
-                y: 10,
-                buttons: 0,
-                wheel: 0,
+            let report = KeyboardReport {
+                modifier: 0,
+                leds: 0,
+                keycodes: [keycode, 0, 0, 0, 0, 0],
             };
-            hid.push_input(&report).unwrap();
+            match hid.push_input(&report) {
+                Err(UsbError::WouldBlock) => defmt::warn!("hid_task: Would block"),
+                Err(err) => panic!("Panicked with error {:?}", err),
+                Ok(_) => {}
+            };
         });
     }
 
@@ -253,7 +267,6 @@ mod app {
 
         defmt::info!("run_display finished");
 
-        hid_task::spawn().unwrap();
         run_display::spawn_after(Milliseconds(10u32)).ok();
     }
 }
