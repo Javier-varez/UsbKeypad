@@ -89,7 +89,7 @@ where
 
     fn index_for_coordinate(&self, point: Point) -> Result<usize, Error> {
         if let Ok((0..=7, 0..=7)) = point.try_into() {
-            let dev_index = (1 - point.x / 4) * 1 + (1 - point.y / 4) * 2;
+            let dev_index = 1 - point.x / 4 + (1 - point.y / 4) * 2;
             let pix_index = point.x % 4 + (point.y % 4) * 4;
 
             return Ok((dev_index * 16 + pix_index) as usize);

@@ -186,7 +186,7 @@ mod app {
         let usb_periph =
             usbd::UsbPeripheral::new(peripherals.USBD, cx.local.clocks.as_ref().unwrap());
         let usb_bus = usbd::Usbd::new(usb_periph);
-        *cx.local.usb_buf_alloc = Some(usb_bus.into());
+        *cx.local.usb_buf_alloc = Some(usb_bus);
         let usb_bus_allocator = cx.local.usb_buf_alloc.as_ref().unwrap();
 
         let mut hid_class = HIDClass::new(usb_bus_allocator, KeyboardReport::desc(), 60);
