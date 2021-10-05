@@ -18,6 +18,7 @@ jobs:
     - uses: actions-rs/toolchain@v1
       with:
         toolchain: stable
+        target: thumbv7em-none-eabi
     - name: Run cargo fmt check
       uses: actions-rs/cargo@v1
       with:
@@ -42,6 +43,7 @@ jobs:
     - uses: actions-rs/toolchain@v1
       with:
         toolchain: stable
+        target: thumbv7em-none-eabi
     - name: Run cargo build
       uses: actions-rs/cargo@v1
       with:
@@ -58,6 +60,7 @@ jobs:
     - uses: actions-rs/toolchain@v1
       with:
         toolchain: stable
+        target: thumbv7em-none-eabi
     - name: Run cargo test
       uses: actions-rs/cargo@v1
       with:
