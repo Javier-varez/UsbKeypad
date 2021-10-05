@@ -107,7 +107,7 @@ mod app {
     use adafruit_neotrellis::NeoTrellis;
     use embedded_graphics::pixelcolor::Rgb888;
     use nrf52840_hal::{self as _, gpio, pac, timer, twim};
-    use shared_bus::BusManagerSimple;
+    use shared_bus::BusManagerAtomicCheck as BusManager;
     use tinybmp::Bmp;
 
     use crate::apply_breathing_effect;
@@ -135,7 +135,9 @@ mod app {
     #[local]
     struct Local {
         timer: timer::Timer<pac::TIMER0>,
-        i2c: BusManagerSimple<twim::Twim<pac::TWIM0>>,
+        display: NeoTrellisDisplay<
+            shared_bus::I2cProxy<'static, shared_bus::AtomicCheckMutex<twim::Twim<pac::TWIM0>>>,
+        >,
         heart_bmp: Bmp<'static, Rgb888>,
         usb_device: UsbDevice<'static, usbd::Usbd<usbd::UsbPeripheral<'static>>>,
         keycode_pingpong: bool,
@@ -150,6 +152,7 @@ mod app {
         local = [
             clocks: Option<clocks::Clocks<clocks::ExternalOscillator, clocks::Internal, clocks::LfOscStopped>> = None,
             usb_buf_alloc: Option<UsbBusAllocator<usbd::Usbd<usbd::UsbPeripheral<'static>>>> = None,
+            i2c_bus: Option<BusManager<twim::Twim<pac::TWIM0>>> = None,
         ]
     )]
     fn init(cx: init::Context) -> (Shared, Local, init::Monotonics) {
@@ -171,8 +174,8 @@ mod app {
 
         let twim: twim::Twim<pac::TWIM0> =
             twim::Twim::new(peripherals.TWIM0, pins, twim::Frequency::K400);
-        let timer = timer::Timer::new(peripherals.TIMER0);
-        let i2c = BusManagerSimple::new(twim);
+        let mut timer = timer::Timer::new(peripherals.TIMER0);
+        let i2c = BusManager::new(twim);
 
         let heart_bmp = Bmp::<Rgb888>::from_slice(HEART_DATA).unwrap();
 
@@ -195,6 +198,18 @@ mod app {
             .build();
         usb_device.poll(&mut [&mut hid_class]);
 
+        *cx.local.i2c_bus = Some(i2c);
+        let i2c = cx.local.i2c_bus.as_mut().unwrap();
+
+        let neotrellis_devs = [
+            NeoTrellis::new(i2c.acquire_i2c(), &mut timer, Some(0x2E)).unwrap(),
+            NeoTrellis::new(i2c.acquire_i2c(), &mut timer, Some(0x2F)).unwrap(),
+            NeoTrellis::new(i2c.acquire_i2c(), &mut timer, Some(0x30)).unwrap(),
+            NeoTrellis::new(i2c.acquire_i2c(), &mut timer, Some(0x31)).unwrap(),
+        ];
+        let mut display = NeoTrellisDisplay::new(neotrellis_devs);
+        display.init().unwrap();
+
         usb_task::spawn().unwrap();
         run_display::spawn().unwrap();
 
@@ -202,7 +217,7 @@ mod app {
             Shared { hid_class },
             Local {
                 timer,
-                i2c,
+                display,
                 heart_bmp,
                 usb_device,
                 keycode_pingpong: true,
@@ -246,24 +261,15 @@ mod app {
         });
     }
 
-    #[task(local = [i2c, timer, heart_bmp], priority = 1)]
+    #[task(local = [display, timer, heart_bmp], priority = 1)]
     fn run_display(cx: run_display::Context) {
         let timer = cx.local.timer;
-        let i2c = cx.local.i2c;
+        let display = cx.local.display;
         let heart_bmp = cx.local.heart_bmp;
 
-        let neotrellis_devs = [
-            NeoTrellis::new(i2c.acquire_i2c(), timer, Some(0x2E)).unwrap(),
-            NeoTrellis::new(i2c.acquire_i2c(), timer, Some(0x2F)).unwrap(),
-            NeoTrellis::new(i2c.acquire_i2c(), timer, Some(0x30)).unwrap(),
-            NeoTrellis::new(i2c.acquire_i2c(), timer, Some(0x31)).unwrap(),
-        ];
-        let mut display = NeoTrellisDisplay::new(neotrellis_devs);
-        display.init().unwrap();
-
         // TODO(javier): Chunk these operations so that they keypad can be used concurrently
-        apply_breathing_effect(&mut display, timer, heart_bmp, 1000);
-        scroll_text(&mut display, timer, "Hi There!!");
+        apply_breathing_effect(display, timer, heart_bmp, 1000);
+        scroll_text(display, timer, "Hi There!!");
 
         defmt::info!("run_display finished");
 
