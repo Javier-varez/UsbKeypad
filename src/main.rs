@@ -3,23 +3,46 @@
 
 mod display;
 
-use core::convert::TryFrom;
 use core::sync::atomic::{AtomicUsize, Ordering};
 
 use defmt_rtt as _;
 use panic_probe as _;
 
-use embedded_graphics::{
-    draw_target::DrawTarget,
-    mono_font::{ascii::FONT_5X8, MonoTextStyle},
-    pixelcolor::Rgb888,
-    prelude::*,
-    text::{Baseline, Text, TextStyleBuilder},
-};
 use nrf52840_hal as _;
-use tinybmp::Bmp;
 
-use display::NeoTrellisDisplay;
+pub struct HidKeys {
+    keys: [u8; 6],
+}
+
+impl HidKeys {
+    fn new() -> Self {
+        Self { keys: [0; 6] }
+    }
+
+    fn press_key(&mut self, scan_code: u8) {
+        for i in 0..6 {
+            if self.keys[i] == 0 {
+                self.keys[i] = scan_code;
+                break;
+            }
+        }
+    }
+
+    fn release_key(&mut self, scan_code: u8) {
+        for i in 0..6 {
+            if self.keys[i] == scan_code {
+                self.keys[i] = 0;
+                break;
+            }
+        }
+    }
+
+    fn clone_to_array(&self) -> [u8; 6] {
+        let mut keycodes = [0u8; 6];
+        keycodes.clone_from_slice(&self.keys);
+        keycodes
+    }
+}
 
 #[defmt::panic_handler]
 fn panic() -> ! {
@@ -31,86 +54,12 @@ defmt::timestamp!("{=usize}", {
     COUNT.fetch_add(1, Ordering::Relaxed)
 });
 
-fn apply_breathing_effect<I2C, TIMER>(
-    display: &mut NeoTrellisDisplay<I2C>,
-    timer: &mut TIMER,
-    bmp: &Bmp<'_, Rgb888>,
-    time_ms: u32,
-) where
-    I2C: embedded_hal::blocking::i2c::Write + embedded_hal::blocking::i2c::Read,
-    TIMER: embedded_hal::blocking::delay::DelayMs<u32>,
-{
-    const NUM_FRAMES: u32 = 100;
-
-    let time_per_frame = time_ms / NUM_FRAMES;
-
-    let apply_alpha = |value, alpha| {
-        let value = value as u32;
-        (if alpha < 50 {
-            value * alpha / 50
-        } else {
-            value * (100 - alpha) / 50
-        }) as u8
-    };
-
-    let convert_color = |color: Rgb888, alpha| {
-        Rgb888::new(
-            apply_alpha(color.r(), alpha),
-            apply_alpha(color.g(), alpha),
-            apply_alpha(color.b(), alpha),
-        )
-    };
-
-    for i in 0..NUM_FRAMES {
-        display.clear(Rgb888::BLACK).unwrap();
-        display
-            .draw_iter(
-                bmp.pixels()
-                    .map(|pixel| Pixel(pixel.0, convert_color(pixel.1, i))),
-            )
-            .unwrap();
-        display.flush().unwrap();
-
-        timer.delay_ms(time_per_frame);
-    }
-}
-
-fn scroll_text<T, TIMER>(display: &mut NeoTrellisDisplay<T>, timer: &mut TIMER, text: &str)
-where
-    T: embedded_hal::blocking::i2c::Write + embedded_hal::blocking::i2c::Read,
-    TIMER: embedded_hal::blocking::delay::DelayMs<u32>,
-{
-    const TEXT_WIDTH: usize = 5;
-
-    let character_style = MonoTextStyle::new(&FONT_5X8, Rgb888::WHITE);
-    let text_style = TextStyleBuilder::new().baseline(Baseline::Bottom).build();
-
-    let max_disp = text.len() * TEXT_WIDTH;
-    for i in 0..max_disp {
-        display.clear(Rgb888::BLACK).unwrap();
-        Text::with_text_style(
-            text,
-            Point::new(-i32::try_from(i).unwrap(), 7),
-            character_style,
-            text_style,
-        )
-        .draw(display)
-        .unwrap();
-        display.flush().unwrap();
-        timer.delay_ms(200u32);
-    }
-}
-
 #[rtic::app(device = nrf52840_hal::pac, peripherals = true, dispatchers = [USBD, QSPI, NFCT])]
 mod app {
-    use crate::scroll_text;
     use adafruit_neotrellis::NeoTrellis;
-    use embedded_graphics::pixelcolor::Rgb888;
     use nrf52840_hal::{self as _, gpio, pac, timer, twim};
     use shared_bus::BusManagerAtomicCheck as BusManager;
-    use tinybmp::Bmp;
 
-    use crate::apply_breathing_effect;
     use crate::display::NeoTrellisDisplay;
 
     use nrf52840_hal::clocks;
@@ -138,14 +87,13 @@ mod app {
         display: NeoTrellisDisplay<
             shared_bus::I2cProxy<'static, shared_bus::AtomicCheckMutex<twim::Twim<pac::TWIM0>>>,
         >,
-        heart_bmp: Bmp<'static, Rgb888>,
         usb_device: UsbDevice<'static, usbd::Usbd<usbd::UsbPeripheral<'static>>>,
-        keycode_pingpong: bool,
     }
 
     #[shared]
     struct Shared {
         hid_class: HIDClass<'static, usbd::Usbd<usbd::UsbPeripheral<'static>>>,
+        keycodes: crate::HidKeys,
     }
 
     #[init(
@@ -156,8 +104,6 @@ mod app {
         ]
     )]
     fn init(cx: init::Context) -> (Shared, Local, init::Monotonics) {
-        static HEART_DATA: &[u8; 246] = include_bytes!("../heart.bmp");
-
         let peripherals = cx.device;
 
         let mut dcb = cx.core.DCB;
@@ -176,8 +122,6 @@ mod app {
             twim::Twim::new(peripherals.TWIM0, pins, twim::Frequency::K400);
         let mut timer = timer::Timer::new(peripherals.TIMER0);
         let i2c = BusManager::new(twim);
-
-        let heart_bmp = Bmp::<Rgb888>::from_slice(HEART_DATA).unwrap();
 
         let clocks = clocks::Clocks::new(peripherals.CLOCK);
         *cx.local.clocks = Some(clocks.enable_ext_hfosc());
@@ -213,14 +157,17 @@ mod app {
         usb_task::spawn().unwrap();
         run_display::spawn().unwrap();
 
+        let keycodes = crate::HidKeys::new();
+
         (
-            Shared { hid_class },
+            Shared {
+                hid_class,
+                keycodes,
+            },
             Local {
                 timer,
                 display,
-                heart_bmp,
                 usb_device,
-                keycode_pingpong: true,
             },
             init::Monotonics(mono),
         )
@@ -237,41 +184,40 @@ mod app {
         usb_task::spawn_after(Milliseconds(2u32)).unwrap();
     }
 
-    #[task(local = [keycode_pingpong], shared = [hid_class], priority = 2)]
+    #[task(shared = [hid_class, keycodes], priority = 2)]
     fn hid_task(mut cx: hid_task::Context) {
-        let keycode_0 = 0x27;
-        let keycode = if *cx.local.keycode_pingpong {
-            keycode_0
-        } else {
-            0
-        };
-        defmt::info!("Sending keycode {}", keycode);
-        *cx.local.keycode_pingpong = !*cx.local.keycode_pingpong;
+        let keycodes = cx.shared.keycodes.lock(|k| k.clone_to_array());
+
         cx.shared.hid_class.lock(|hid| {
             let report = KeyboardReport {
                 modifier: 0,
                 leds: 0,
-                keycodes: [keycode, 0, 0, 0, 0, 0],
+                keycodes,
             };
             match hid.push_input(&report) {
                 Err(UsbError::WouldBlock) => defmt::warn!("hid_task: Would block"),
-                Err(err) => panic!("Panicked with error {:?}", err),
+                Err(err) => panic!("{:?}", err),
                 Ok(_) => {}
             };
         });
     }
 
-    #[task(local = [display, timer, heart_bmp], priority = 1)]
+    #[task(local = [display, timer], shared = [keycodes], priority = 1)]
     fn run_display(cx: run_display::Context) {
-        let timer = cx.local.timer;
         let display = cx.local.display;
-        let heart_bmp = cx.local.heart_bmp;
+        let timer = cx.local.timer;
+        let mut keycodes = cx.shared.keycodes;
 
-        // TODO(javier): Chunk these operations so that they keypad can be used concurrently
-        apply_breathing_effect(display, timer, heart_bmp, 1000);
-        scroll_text(display, timer, "Hi There!!");
-
-        defmt::info!("run_display finished");
+        display
+            .process_events(timer, |key_idx| match key_idx.event_type {
+                crate::display::EventType::KeyUp => {
+                    keycodes.lock(|k| k.release_key(key_idx.usb_scan_code));
+                }
+                crate::display::EventType::KeyDown => {
+                    keycodes.lock(|k| k.press_key(key_idx.usb_scan_code));
+                }
+            })
+            .unwrap();
 
         run_display::spawn_after(Milliseconds(10u32)).ok();
     }
