@@ -48,20 +48,3 @@ jobs:
       uses: actions-rs/cargo@v1
       with:
         command: build
-
-  cargo_test:
-    runs-on: ubuntu-latest
-
-    steps:
-    - name: checkout
-      uses: actions/checkout@v2
-      with:
-        submodules: 'true'
-    - uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable
-        target: thumbv7em-none-eabi
-    - name: Run cargo test
-      uses: actions-rs/cargo@v1
-      with:
-        command: test
