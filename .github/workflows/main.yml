@@ -1,0 +1,64 @@
+name: UsbKeypad
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  cargo_clippy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: checkout
+      uses: actions/checkout@v2
+      with:
+        submodules: 'true'
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+    - name: Run cargo fmt check
+      uses: actions-rs/cargo@v1
+      with:
+        command: fmt
+        args: --all -- --check
+    - name: Run cargo clippy
+      uses: actions-rs/clippy-check@v1
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        args: --all-features
+
+  cargo_build:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+    - name: checkout
+      uses: actions/checkout@v2
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+    - name: Run cargo build
+      uses: actions-rs/cargo@v1
+      with:
+        command: build
+
+  cargo_test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: checkout
+      uses: actions/checkout@v2
+      with:
+        submodules: 'true'
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+    - name: Run cargo test
+      uses: actions-rs/cargo@v1
+      with:
+        command: test
