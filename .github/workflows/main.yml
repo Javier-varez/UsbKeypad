@@ -44,6 +44,8 @@ jobs:
       with:
         toolchain: stable
         target: thumbv7em-none-eabi
+    - name: Install flip-link
+      run: cargo install flip-link
     - name: Run cargo build
       uses: actions-rs/cargo@v1
       with:
